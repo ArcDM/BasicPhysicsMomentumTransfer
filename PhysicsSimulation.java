@@ -34,6 +34,8 @@ public class PhysicsSimulation extends JPanel
     private List< Box > boxes;
     private Timer timer = null;
 
+    int collision_count;
+
     public PhysicsSimulation()
     {
         boxes = new ArrayList<>();
@@ -69,6 +71,8 @@ public class PhysicsSimulation extends JPanel
                     { // boxes can chain collide, there is a need to check the other boxes
                         if( boxes.get( index ).resolveCollision() )
                         {
+                            collision_count++;
+                            System.out.printf( "DEBUG: Box %d collided, collision_count %d\n", index, collision_count );
                             index += ( index == boxes.size() - 1 )? 1 : 2;
                         }
                     }
@@ -112,9 +116,11 @@ public class PhysicsSimulation extends JPanel
     private void initializeBoxes()
     {
         boxes.clear();
-        boxes.add( new Box( 100, 5, 1000 ) );
-        boxes.add( new Box( 200, 0, 1000 ) );
+        boxes.add( new Box( 100, 0, 10 ) );
+        //boxes.add( new Box( 200, 0, 100 ) );
         boxes.add( new Box( 300, -5, 1000 ) );
+
+        collision_count = 0;
     }
 
     @Override
@@ -226,7 +232,7 @@ public class PhysicsSimulation extends JPanel
                 velocity *= -1;
                 return true;
             }
-            else if( index > 0 && boxes.get( index - 1 ).X_location + boxes.get( index - 1 ).size - X_location == 0 && ( boxes.get( index - 1 ).velocity > 0 || velocity < 0 ) )
+            else if( index > 0 && boxes.get( index - 1 ).X_location + boxes.get( index - 1 ).size - X_location == 0 && boxes.get( index - 1 ).velocity > velocity )
             { // hits box to left
                 double collider_velocity = boxes.get( index - 1 ).velocity,
                         collider_mass = boxes.get( index - 1 ).mass;
