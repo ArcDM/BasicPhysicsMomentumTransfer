@@ -1,6 +1,6 @@
 /* BasicPhysicsMomentumTransfer.java
 
-This is the initial implementation to simulate and animate blocks hitting each other in a frictionless 1D plane.
+This program simulates and animates blocks hitting each other on a frictionless 1D plane.
 */
 
 import javax.swing.JFrame;
