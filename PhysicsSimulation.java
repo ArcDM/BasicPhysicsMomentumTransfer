@@ -14,7 +14,8 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.util.ArrayList;
 import java.util.List;
-//import java.util.Random;
+import java.util.Iterator;
+import java.util.NoSuchElementException;
 import javax.swing.JButton;
 import javax.swing.JPanel;
 import javax.swing.SwingUtilities;
@@ -32,15 +33,15 @@ public class PhysicsSimulation extends JPanel
     private static final Color GROUND_COLOR = Color.ORANGE;
     private static final Color BOX_COLOR = Color.LIGHT_GRAY;
     private static final double BOX_SCALING = 100 / 5;
-    private List< Box > boxes;
+    private List< Box > box_list;
     private Timer timer = null;
 
     int collision_count;
 
     public PhysicsSimulation()
     {
-        boxes = new ArrayList<>();
-        initializeBoxes();
+        box_list = new ArrayList<>();
+        initializeboxes();
 
         timer = new Timer( 30, new ActionListener()
         {
@@ -48,34 +49,34 @@ public class PhysicsSimulation extends JPanel
             {
                 for( double change_in_time, impulse_limit = 1.0; impulse_limit > 0.0; impulse_limit -= change_in_time )
                 { // checks and resolves all physics interactions whithin the time frame
-                    int collision_index = -1;
+                    Box collision_reference = null;
                     change_in_time = impulse_limit;
 
-                    for( int index = boxes.size() - 1; index >= 0; index-- )
+                    for( Box box : box_list )
                     { // time only advances to the next collision
-                        double collision_time = boxes.get( index ).getCollisionTime();
+                        double collision_time = box.getCollisionTime();
 
                         if( collision_time >= 0.0 && change_in_time > collision_time )
                         {
                             change_in_time = collision_time;
-                            collision_index = index;
+                            collision_reference = box;
                         }
                     }
 
-                    for( Box box : boxes )
+                    for( Box box : box_list )
                     {
                         box.move( change_in_time );
                     }
 
-                    if( collision_index != -1 )
+                    if( collision_reference != null )
                     {
                         collision_count++;
-                        boxes.get( collision_index ).resolveCollision();
-                        //System.out.printf( "DEBUG: Box %d collided, collision_count %d\n", collision_index, collision_count );
+                        collision_reference.resolveCollision();
+                        //System.out.printf( "DEBUG: Box %d collided, collision_count %d\n", box_list.indexOf( collision_reference ), collision_count );
                     }
                 }
 
-                for( Box box : boxes )
+                for( Box box : box_list )
                 {
                     repaint();
                 }
@@ -86,7 +87,7 @@ public class PhysicsSimulation extends JPanel
         reset_button.addActionListener( new ActionListener()
         {
             public void actionPerformed( ActionEvent e ) {
-                initializeBoxes();
+                initializeboxes();
                 timer.restart();
             }
         } );
@@ -101,19 +102,19 @@ public class PhysicsSimulation extends JPanel
         timer.start();
     }
 
-    private void debugBoxes()
+    private void debugboxes()
     {
-        for( Box box : boxes )
+        for( Box box : box_list )
         {
             box.printDebug();
         }
     }
 
-    private void initializeBoxes()
+    private void initializeboxes()
     {
-        boxes.clear();
-        boxes.add( new Box( 200, 0, 100 ) );
-        boxes.add( new Box( 400, -5, 100000000 ) );
+        box_list.clear();
+        box_list.add( new Box( 200, 0, 100, null ) );
+        box_list.add( new Box( 400, -5, 100000000, box_list.get( box_list.size() - 1 ) ) );
 
         collision_count = 0;
     }
@@ -125,7 +126,7 @@ public class PhysicsSimulation extends JPanel
 
         gr.setColor( BOX_COLOR );
 
-        for( Box box : boxes )
+        for( Box box : box_list )
         {
             box.drawBox( gr );
         }
@@ -174,16 +175,16 @@ public class PhysicsSimulation extends JPanel
         private double velocity; // signum designates direction
         private double mass;
         private double size;
-        private int index;
+        private Box collider; // the box to the left, if any
 
-        public Box( double input_X, double input_velocity, double input_mass )
+        public Box( double input_X, double input_velocity, double input_mass, Box input_collider )
         {
             X_location = input_X;
             Y_location = GROUND_LOCATION;
             velocity = input_velocity;
             mass = input_mass;
-            size = Math.log10( mass ) * BOX_SCALING;
-            index = boxes.size();
+            size = Math.max( Math.log10( mass ), 1 ) * BOX_SCALING;
+            collider = input_collider;
         }
 
         public void drawBox( Graphics gr )
@@ -206,16 +207,16 @@ public class PhysicsSimulation extends JPanel
 
         public double getCollisionTime()
         { // returns time it takes to collide were the time is number of cycles needed
-            if( index == 0 )
+            if( collider == null )
             { // how long until the box would hit the wall
                 if( velocity < 0 )
                 {
                     return ( WALL_LOCATION - X_location ) / velocity;
                 }
             }
-            else if( boxes.get( index - 1 ).velocity > velocity )
+            else if( collider.velocity > velocity )
             { // how long until the box would hit the box to the left
-                return ( boxes.get( index - 1 ).X_location + boxes.get( index - 1 ).size - X_location ) / ( velocity - boxes.get( index - 1 ).velocity );
+                return ( collider.X_location + collider.size - X_location ) / ( velocity - collider.velocity );
             }
 
             return Double.NaN; // not on a collision course
@@ -223,29 +224,28 @@ public class PhysicsSimulation extends JPanel
 
         public void resolveCollision()
         {
-            if( index == 0 )
+            if( collider == null )
             { // hits wall
                 velocity *= -1;
             }
             else
             { // hits box to left
-                double collider_velocity = boxes.get( index - 1 ).velocity,
-                        collider_mass = boxes.get( index - 1 ).mass;
-
                 /* initial velocities (v) to final velocities (u)
                     m1 * v1 + m2 * v2 = m1 * u1 + m2 * u2
                     u1 = ( v1 * ( m1 - m2 ) + 2 * m2 * v2 ) / ( m1 + m2 ) */
 
-                boxes.get( index - 1 ).velocity = ( collider_velocity * ( collider_mass - mass ) + 2 * mass * velocity ) / ( mass + collider_mass );
+                double new_velocity = ( velocity * ( mass - collider.mass ) + 2 * collider.mass * collider.velocity ) / ( mass + collider.mass );
 
-                velocity = ( velocity * ( mass - collider_mass ) + 2 * collider_mass * collider_velocity ) / ( mass + collider_mass );
+                collider.velocity = ( collider.velocity * ( collider.mass - mass ) + 2 * mass * velocity ) / ( mass + collider.mass );
+
+                velocity = new_velocity;
             }
         }
 
         public void printDebug()
         {
             System.out.printf( "DEBUG:\tBox %d location %f, offset %f, velocity %f\n",
-                index, X_location, X_location + size, velocity );
+                box_list.indexOf( this ), X_location, X_location + size, velocity );
         }
     }
 }
