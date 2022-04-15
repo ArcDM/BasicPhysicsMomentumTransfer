@@ -11,15 +11,15 @@ import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Graphics;
 import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Iterator;
-import java.util.NoSuchElementException;
+import javax.swing.AbstractAction;
+import javax.swing.ActionMap;
 import javax.swing.JButton;
+import javax.swing.JComponent;
 import javax.swing.JPanel;
-import javax.swing.SwingUtilities;
+import javax.swing.KeyStroke;
 import javax.swing.Timer;
 
 @SuppressWarnings( "serial" )
@@ -42,7 +42,6 @@ public class PhysicsSimulation extends JPanel
 
     public PhysicsSimulation()
     {
-
         box_perameters = new ArrayList<>();
         box_perameters.add( new double[] { 200, 0, 100 } );
         box_perameters.add( new double[] { 400, -5, 100000000 } );
@@ -50,51 +49,18 @@ public class PhysicsSimulation extends JPanel
         box_list = new ArrayList<>();
         initializeboxes();
 
-        timer = new Timer( 30, new ActionListener()
-        {
-            public void actionPerformed( ActionEvent e )
-            {
-                for( double change_in_time, impulse_limit = 1.0; impulse_limit > 0.0; impulse_limit -= change_in_time )
-                { // checks and resolves all physics interactions whithin the time frame
-                    Box collision_reference = null;
-                    change_in_time = impulse_limit;
+        timer = new Timer( 30, new Simulation() );
 
-                    for( Box box : box_list )
-                    { // time only advances to the next collision
-                        double collision_time = box.getCollisionTime();
+        getInputMap( JComponent.WHEN_IN_FOCUSED_WINDOW ).put( KeyStroke.getKeyStroke( "P" ), "Pause_Button" );
+        getInputMap( JComponent.WHEN_IN_FOCUSED_WINDOW ).put( KeyStroke.getKeyStroke( "SPACE" ), "Pause_Button" );
+        getInputMap( JComponent.WHEN_IN_FOCUSED_WINDOW ).put( KeyStroke.getKeyStroke( "R" ), "R_Button" );
 
-                        if( collision_time >= 0.0 && change_in_time > collision_time )
-                        {
-                            change_in_time = collision_time;
-                            collision_reference = box;
-                        }
-                    }
-
-                    for( Box box : box_list )
-                    {
-                        box.move( change_in_time );
-                    }
-
-                    if( collision_reference != null )
-                    {
-                        collision_count++;
-                        collision_reference.resolveCollision();
-                        //System.out.printf( "DEBUG: Box %d collided, collision_count %d\n", box_list.indexOf( collision_reference ), collision_count );
-                    }
-                }
-
-                repaint();
-            }
-        } );
+        getActionMap().put( "Pause_Button", new Pause() );
+        getActionMap().put( "R_Button", new Reset() );
 
         JButton reset_button = new JButton( "Reset" );
-        reset_button.addActionListener( new ActionListener()
-        {
-            public void actionPerformed( ActionEvent e ) {
-                initializeboxes();
-                timer.restart();
-            }
-        } );
+        reset_button.getInputMap().put( KeyStroke.getKeyStroke( "SPACE" ), "none" ); // prevents the space bar from triggering the button (this *is* an issue otherwise)
+        reset_button.addActionListener( new Reset() );
 
         JPanel panel = new JPanel();
         panel.add( reset_button );
@@ -104,6 +70,78 @@ public class PhysicsSimulation extends JPanel
         setBackground( BACKGROUND_COLOR );
 
         timer.start();
+    }
+
+    private class Simulation extends AbstractAction
+    {
+        @Override
+        public void actionPerformed( ActionEvent e )
+        {
+            for( double change_in_time, impulse_limit = 1.0; impulse_limit > 0.0; impulse_limit -= change_in_time )
+            { // checks and resolves all physics interactions whithin the time frame
+                Box collision_reference = null;
+                change_in_time = impulse_limit;
+
+                for( Box box : box_list )
+                { // time only advances to the next collision
+                    double collision_time = box.getCollisionTime();
+
+                    if( collision_time >= 0.0 && change_in_time > collision_time )
+                    {
+                        change_in_time = collision_time;
+                        collision_reference = box;
+                    }
+                }
+
+                for( Box box : box_list )
+                {
+                    box.move( change_in_time );
+                }
+
+                if( collision_reference != null )
+                {
+                    collision_count++;
+                    collision_reference.resolveCollision();
+                    //System.out.printf( "DEBUG: Box %d collided, collision_count %d\n", box_list.indexOf( collision_reference ), collision_count );
+                }
+            }
+
+            repaint();
+        }
+    }
+
+    private class Pause extends AbstractAction
+    {
+        @Override
+        public void actionPerformed( ActionEvent e )
+        {
+            if( timer.isRunning() )
+            {
+                timer.stop();
+            }
+            else
+            {
+                timer.start();
+            }
+        }
+    }
+
+    private class Reset extends AbstractAction
+    {
+        @Override
+        public void actionPerformed( ActionEvent e )
+        {
+            initializeboxes();
+
+            if( timer.isRunning() )
+            {
+                timer.restart();
+            }
+            else
+            {
+                repaint();
+            }
+        }
     }
 
     private void debugboxes()
@@ -119,6 +157,7 @@ public class PhysicsSimulation extends JPanel
         box_list.clear();
 
         Collections.sort( box_perameters, ( double[] v1, double[] v2 ) -> Double.compare( v1[ 0 ], v2[ 0 ] ) );
+        // the boxes must be added in order of location so the internal value "collider" can be easily updated
 
         box_list.add( new Box(
             box_perameters.get( 0 )[ 0 ],
