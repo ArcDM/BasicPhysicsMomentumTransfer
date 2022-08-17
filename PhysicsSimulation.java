@@ -11,6 +11,7 @@ import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Graphics;
 import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -43,13 +44,18 @@ public class PhysicsSimulation extends JPanel
     public PhysicsSimulation()
     {
         box_perameters = new ArrayList<>();
-        box_perameters.add( new double[] { 200, 0, 100 } );
-        box_perameters.add( new double[] { 400, -5, 100000000 } );
+        box_perameters.add( new double[] { 200, 0, 100, 0 } ); // preset block
+        box_perameters.add( new double[] { 400, -5, 100000000, 0 } ); // preset block
+
+        for( double[] box_param : box_perameters )
+        {
+            box_param[ 3 ] = Math.max( Math.log10( box_param[ 1 ] ), 1 ) * BOX_SCALING;
+        }
 
         box_list = new ArrayList<>();
         initializeboxes();
 
-        timer = new Timer( 30, new Simulation() );
+        timer = new Timer( 30, new Simulation() ); // first parameter is the 'ticks' per seconds
 
         getInputMap( JComponent.WHEN_IN_FOCUSED_WINDOW ).put( KeyStroke.getKeyStroke( "P" ), "Pause_Button" );
         getInputMap( JComponent.WHEN_IN_FOCUSED_WINDOW ).put( KeyStroke.getKeyStroke( "SPACE" ), "Pause_Button" );
@@ -58,9 +64,7 @@ public class PhysicsSimulation extends JPanel
         getActionMap().put( "Pause_Button", new Pause() );
         getActionMap().put( "R_Button", new Reset() );
 
-        JButton reset_button = new JButton( "Reset" );
-        reset_button.getInputMap().put( KeyStroke.getKeyStroke( "SPACE" ), "none" ); // prevents the space bar from triggering the button (this *is* an issue otherwise)
-        reset_button.addActionListener( new Reset() );
+        JButton reset_button = setupButton( "Reset", new Reset() );
 
         JPanel panel = new JPanel();
         panel.add( reset_button );
@@ -110,6 +114,14 @@ public class PhysicsSimulation extends JPanel
         }
     }
 
+    private JButton setupButton( String button_name, ActionListener button_effect )
+    {
+        JButton result_button = new JButton( button_name );
+        result_button.getInputMap().put( KeyStroke.getKeyStroke( "SPACE" ), "none" ); // prevents the space bar from triggering the button (this *is* an issue otherwise)
+        result_button.addActionListener( button_effect );
+        return result_button;
+    }
+
     private class Pause extends AbstractAction
     {
         @Override
@@ -138,7 +150,7 @@ public class PhysicsSimulation extends JPanel
                 timer.restart();
             }
             else
-            {
+            { // if the simulation is paused then the reset wont be seen without a new repaint() call
                 repaint();
             }
         }
@@ -235,7 +247,7 @@ public class PhysicsSimulation extends JPanel
     {
         private double X_location;
         private double Y_location;
-        private double velocity; // signum designates direction
+        private double velocity; // in units per 'frame', signum designates direction
         private double mass;
         private double size;
         private Box collider; // the box to the left, if any
